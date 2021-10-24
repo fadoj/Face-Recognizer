@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+  	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!-- Site para Mobile -->
+  	<title>Segurança Residencial</title>
+  	<script src="/socket.io/socket.io.js"></script>
+  	<style type="text/css">
+  		label {
+  		   cursor: pointer;
+  		   width: 100;
+  		   height: 500;
+  		   background-color: lightgrey;
+  		   font-size: 60px;
+  		}
+
+  		#input {
+  		   opacity: 0;
+  		   position: absolute;
+  		   z-index: -1;
+  		}
+
+  		body {
+  		  text-align: center;
+  		}
+  	</style>
+
+  </head>
+  <body>
+
+    <!-- Insere tags do body -->
+  	<h1 id="h1b" style="font-size: 80px;">Segurança Residencial</h1>
+  	<div id="div" style="margin-bottom: 70px;">
+  	</div>
+  	<h4 id="h2b" style="font-size:65px; margin: 20px;">Insira uma foto para entrar</h4>
+  	<label id="label" for="input">Inserir foto</label>
+  	<!-- <input type="file" accept="image/*" capture="user" id="input"> -->
+  	<input type="file" id="input">
+    <div id="dv" style="margin: 80px;">
+      <!-- <img src="" style="margin: 30px;" id="imgOut2"> -->
+      <canvas style="margin: 30px;" id="canOut"></canvas>
+  		<h4 id="nmOut" style="font-size: 30px;"></h4>
+  	</div>
+
+  	<script type="text/javascript">
+      //limpa cache
+  	  window.localStorage.clear();
+
+      // Socket io 
+      var socket = io();
+      // Obtem input tag
+      var input = document.getElementById("input");
+      // Entra em um canal - falta segurança + aqui
+      var room = "test";
+      socket.emit("join", room);
+
+      
+      // Evento file input change
+      document.getElementById("input").addEventListener("change", function (event) {
+        // Prepara file reader
+        var file = event.target.files[0];
+        var fileReader = new FileReader();
+        //Limpa cache
+        window.localStorage.clear();
+        //Quando usuário enviar imagem
+        fileReader.onloadend = function (event) {
+          // Envia imagem para o server
+          var image = event.target.result
+          socket.emit("image", image);
+
+          //Status atual
+          h2b.innerHTML = "Foto enviada";
+          //Status atual
+          h2b.innerHTML = "Espere...";
+          inp = document.getElementById("input");
+          inp.setAttribute("disabled", "true");
+        };
+        // Lê arquivo
+        fileReader.readAsDataURL(file);	
+      })
+
+      // Evento another, pede nova foto
+      socket.on("another", function (msg) {
+        socket.emit("redirect", room);
+  		  h2b = document.getElementById("h2b");
+  		  h2b.innerHTML = "Erro: Envie outra foto";
+        setTimeout(function(){}, 4000);
+        h2b.innerHTML = "Insira uma foto para entrar";
+        inp = document.getElementById("input");
+        inp.removeAttribute("disabled");
+      });
+
+      // Evento image2, recebe foto da face
+      socket.on("image2", function (image) {
+        var img2 = new Image();
+        img2.onload = function(){
+          var canvas = document.getElementById("canOut");
+          var ctx = canvas.getContext("2d");
+
+          ctx.canvas.width = img2.width/3;
+          ctx.canvas.height = img2.height/3;
+
+          // COloca foto no canvas
+          ctx.drawImage(img2, 0, 0, img2.width, img2.height);
+        };
+        img2.src = image; 
+      });
+
+      // Evento name, recebe nome 
+      socket.on("name", function (name) {
+        //Display nome
+  		  nmOut = document.getElementById("nmOut");
+  		  nmOut.innerHTML = name;
+        socket.emit("ret", "1");
+        //Se o usuário for desconhecido
+    		if(name == "Desconhecido") {
+          nmOut.style = "font-size: 40px";
+    			h2b.innerHTML = "Erro: Usuário inválido";
+          setTimeout(function(){}, 4000);
+          h2b.innerHTML = "Insira uma foto para entrar";
+          inp = document.getElementById("input");
+          inp.setAttribute("disabled", "true");
+    		} 
+    		else {
+          //Se o usuário foronhecido
+    			h2b.innerHTML = "Usuário válido" + "<br>" + "Abrindo portão...";
+          setTimeout(function(){ window.location.reload(); }, 6000);
+    		} 
+      });
+    </script>
+
+  </body>
+</html>

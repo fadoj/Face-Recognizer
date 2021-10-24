@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!-- Site para PC -->
+    	<title>Segurança Residencial</title>
+    	<script src="face-api/dist/face-api.min.js"></script>
+    	<style>
+            #cont {
+            	position: relative;
+            }
+
+            #canvas {
+            	position: absolute;
+            	top: 0;
+            	left: 0;
+            }
+        </style>
+        <script src="/socket.io/socket.io.js"></script>
+    
+    </head>
+
+    <body>
+        <!-- Div que armazena tags do body -->
+        <div id="allDiv"></div>
+
+        <script type="text/javascript">
+            
+            //Declara variáveis globais
+            var MODEL_URL = 'face-api/weights/';
+            var h2 = document.getElementById('h2a');
+            var canvas = document.getElementById('canvas');
+            var input = document.getElementById('image');
+            var outputImage = document.getElementById('outputImage');
+            var nameLbl = document.getElementById("name");
+            var faceDesc1;
+
+            //Estado de load modelos
+            var ld;
+            load = 0;
+
+            //Carrega Modelos
+            async function loadMod(){
+
+                var MODEL_URL = 'face-api/weights/';
+                //Status atual
+                //h2.innerHTML = "Status: Carregando programa...";
+
+                //Pra trocar de detector uncomment a de baixo e comment a tinyFaceDetector
+                //await faceapi.loadSsdMobilenetv1Model(MODEL_URL)
+                //await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
+                await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+
+                //Status atual
+                //h2.innerHTML = "Status: Programa carregado...";
+                //Chama detecção de face
+                //faceDet();
+            }
+
+
+            //Detecta Face
+            async function faceDet(){
+
+                var h2 = document.getElementById('h2a');
+                //Status atual
+                h2.innerHTML = "Status: Detectando face...";
+
+                var canvas = document.getElementById('canvas');
+                var input = document.getElementById('image');
+
+                //Detecta faces, landmarks, expressões e descriptors da input
+                //let fullFaceDescriptions = await faceapi.detectAllFaces(input, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(new faceapi.TinyFaceDetectorOptions()).withFaceExpressions(new faceapi.TinyFaceDetectorOptions()).withFaceDescriptors();
+
+                //Detecta faces, landmarks, expressões e descriptors da input
+                let fullFaceDescriptions = await faceapi.detectSingleFace(input, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(new faceapi.TinyFaceDetectorOptions()).withFaceExpressions(new faceapi.TinyFaceDetectorOptions()).withFaceDescriptor();
+
+                //Pra trocar de detector uncomment a de baixo e comment a de cima
+                //let fullFaceDescriptions = await faceapi.detectAllFaces(input).withFaceLandmarks().withFaceExpressions().withFaceDescriptors();
+                
+                if (!fullFaceDescriptions) {
+                    //Se não detectar face
+
+                    //Status atual
+                    h2.innerHTML = "Status: Nenhuma face detectada";
+
+                    if (h2.innerHTML == "Status: Nenhuma face detectada") {
+                        // Get WebSocket
+                        var socket = io();
+
+                        // Join a channel
+                        var room = "test";
+                        socket.emit("join", room);
+
+                        socket.emit("another", "1"); 
+                        console.log("another");
+                        setTimeout(function(){ window.location.reload(); }, 7000);
+                    }
+                }
+                else {
+                    //Se detectar face
+
+                    faceDesc1 = fullFaceDescriptions;
+                    //var displaySize = { width: input.width, height: input.height }
+                    //faceapi.matchDimensions(canvas, displaySize)
+                    faceDesc1 = faceapi.resizeResults(faceDesc1, input)
+                    //faceapi.draw.drawDetections(canvas, faceDesc1)
+                    //faceapi.draw.drawFaceLandmarks(canvas, faceDesc1)
+                    //faceapi.draw.drawFaceExpressions(canvas, faceDesc1)
+                    
+                    //Retira face da imagem e salva na outputImage 
+                    extractFaceFromBox(input, faceDesc1.detection.box)
+                    //Status atual
+                    h2.innerHTML = "Status: Face detectada...";
+                    
+                    //Chama reconhecimento de face
+                    faceRec();
+                }
+            }
+
+            //Reconhece Face
+            async function faceRec(){
+
+                var h2 = document.getElementById('h2a');
+                var nameLbl = document.getElementById("name");
+                //Status atual
+                h2.innerHTML = "Status: Reconhecendo face...";
+                //Carrega usuários cadastrados
+                const labels = ['Bernardo', 'Lage']
+
+                //Carrega fotos dos usuários cadastrados
+                const labeledFaceDescriptors = await Promise.all(
+
+                    labels.map(async label => {
+
+                        const imgUrl = `${label}.jpg`;
+                        var link = window.location.href;
+                        link = link.substr(8, link.length - 20);
+                        url = 'https://' + link + '/photos/' + imgUrl;
+                        var img;
+                        image = document.createElement("img");
+                        image.setAttribute("src", url);
+
+                        //Detecta faces, landmarks, expresssões e descriptors da ref
+                        const faceDescription =  await faceapi.detectSingleFace(image, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(new faceapi.TinyFaceDetectorOptions()).withFaceExpressions(new faceapi.TinyFaceDetectorOptions()).withFaceDescriptor();
+                        
+                        //Pra trocar de detector uncomment a de baixo e comment a de cima
+                        //const faceDescription =  await faceapi.detectSingleFace(image).withFaceLandmarks().withFaceExpressions().withFaceDescriptor();
+                        
+                        //Se não detectar face na foto de referência
+                        if (!faceDescription) {
+                            var h2 = document.getElementById("h2a");
+                            //Status atual
+                            h2.innerHTML = "Status: Nenhuma face detectada na foto de referência...";
+                        }
+                        
+                        //Junta label do nome com os descriptors
+                        const faceDescriptors = [faceDescription.descriptor]
+                        return new faceapi.LabeledFaceDescriptors(label, faceDescriptors)
+                    })
+                );
+
+                //Adiciona ref no FaceMatcher
+                const threshold = 0.6;
+                const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, threshold)
+                
+                /*//Compara input com ref
+                const results = faceDesc1.map(fd => faceMatcher.findBestMatch(fd.descriptor))
+                
+                //Obtem resultado da comparação
+                results.forEach((bestMatch, i) => {
+                    //Display resultado
+                    var text = bestMatch.label;
+                    nameLbl.innerHTML = "Nome: " + text;
+                    //Status atual
+                    h2.innerHTML = "Status: Face reconhecida";
+                })*/
+
+                //Compara input com ref
+                if (faceDesc1) {
+                  //Obtem resultado da comparação
+                  const bestMatch = faceMatcher.findBestMatch(faceDesc1.descriptor)
+                  //Display resultado
+                  var text = bestMatch.label;
+                  nameLbl.innerHTML = "Nome: " + text;
+                  //Status atual
+                  h2.innerHTML = "Status: Face reconhecida";
+                }          
+
+                //Se o resultado for desconhecido
+                if(nameLbl.innerHTML == "Nome: Desconhecido") {
+                    //Status atual
+                    h2.innerHTML = "Status: Nenhuma face reconhecida";
+                }
+                
+                //Se o reconhecer face
+                if (h2.innerHTML == "Status: Nenhuma face reconhecida" || h2.innerHTML == "Status: Face reconhecida") {
+                    nameLbl = document.getElementById("name")
+                    var img = document.getElementById("outputImage");
+                    var c = document.createElement("canvas");
+                    c.width = img.width;
+                    c.height = img.height;
+                    var ctx = c.getContext("2d");
+                    ctx.drawImage(img, 0, 0, c.width/3, c.height/3);
+
+                    ig = c.toDataURL("mime-type", 0.5)
+
+                    var nmOut = nameLbl.innerHTML;
+                    nmOut = nmOut.substring(6);
+
+                    // Get WebSocket
+                    var socket = io();
+
+                    // Join a channel
+                    var room = "test";
+                    socket.emit("join", room);
+
+                    //Envia dados (face e nome)
+                    socket.emit("image2", ig);
+                    console.log("IMG sent");
+                    socket.emit("name", nmOut);
+                    console.log("name sent");
+                    setTimeout(function(){ window.location.reload(); }, 10000);
+                }
+                
+            }
+
+            //Retira face da imagem e salva na outputImage
+            async function extractFaceFromBox(inputImage, box){
+
+                var outputImage = document.getElementById('outputImage');
+                //Obtem região da face
+                const regionsToExtract = [
+                    new faceapi.Rect( box.x, box.y , box.width , box.height)
+                ]
+                
+                //Extrai face do input        
+                let faceImages = await faceapi.extractFaces(inputImage, regionsToExtract)
+                
+                if(faceImages.length == 0){
+                    //Se não obter face
+                    console.log('Face not found')
+                }
+                else
+                {
+                    //Se obter face
+                    faceImages.forEach(cnv =>{      
+                        outputImage.src = cnv.toDataURL();      
+                    })
+                }   
+            }
+
+            //Carrega pag 1
+            async function loadP1() {
+                allDiv = document.getElementById("allDiv");
+
+                h1 = document.createElement("h1");
+                h1.innerHTML = "Segurança Residencial";
+                h1.setAttribute("id", "h1a");
+                allDiv.appendChild(h1);
+
+                h2 = document.createElement("h4");
+                h2.setAttribute("id", "h2a");
+                h2.innerHTML = "Carregue a foto pelo celular";
+                allDiv.appendChild(h2);
+
+                window.localStorage.clear();
+                h2a = document.getElementById("h2a")
+                // Get WebSocket
+                var socket = io();
+
+                // Join a channel
+                var room = "test";
+                socket.emit("join", room);
+
+
+                //Recebe foto do cel
+                socket.on("image", function (image) {
+                    h2a.innerHTML = "Status: Carregando foto..."; 
+                    window.localStorage.setItem('inputImg', image);
+                    //Chama carregador pag 2
+                    loadP2();
+                });
+            }
+
+            //Carrega pag 2
+            async function loadP2() {
+                h4 = document.getElementById("h2a");
+                h4.innerHTML = "Status: Carregando foto...";
+
+                div = document.createElement("div");
+                div.setAttribute("id", "cont");
+                allDiv.appendChild(div);
+
+                img = document.createElement("img");
+                var _img;
+                _img = window.localStorage.getItem('inputImg');
+                img.setAttribute("src", _img);
+                img.setAttribute("id", "image");
+                allDiv.appendChild(img);
+                document.getElementById("cont").appendChild(img);
+                h4.innerHTML = "Status: Foto carregada...";
+
+                canvas = document.createElement("canvas");
+                canvas.setAttribute("id", "canvas");
+                allDiv.appendChild(canvas);
+                document.getElementById("cont").appendChild(img);
+
+                nm = document.createElement("h4");
+                nm.innerHTML = "Nome: ";
+                nm.setAttribute("id", "name");
+                allDiv.appendChild(nm);
+
+                fc = document.createElement("h4");
+                fc.setAttribute("id", "face");
+                fc.innerHTML = "Face: ";
+                allDiv.appendChild(fc);
+
+                img2 = document.createElement("img");
+                img2.setAttribute("src", "");
+                img2.setAttribute("id", "outputImage");
+                allDiv.appendChild(img2);
+
+                //Inicia detecção/reconhecimento
+                faceDet();
+
+            }
+
+            //Função aplicativo
+            function app() {
+                //Chama carregador modelos
+                loadMod();
+                //Chama carregador pag 1
+                loadP1();
+            }
+
+            //Chama função aplicativo
+            app();
+
+        </script>
+    </body>
+
+</html>

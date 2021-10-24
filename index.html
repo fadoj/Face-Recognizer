@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<!-- Site Verificador Dispositivo -->
+	<title>Segurança Residencial</title>
+</head>
+<body>
+	<script type="text/javascript">
+		//Verifica dispositivo
+		var isMobile = false;
+	    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+		    isMobile = true;
+	    }
+
+	    if(isMobile) {
+	    	//Se for celular
+	    	window.location.href = "indexM.html";
+	    }
+	    else {
+	    	//Se não for celular
+	    	window.location.href = "indexPC.html";
+	    }
+	</script>
+</body>
